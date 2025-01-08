@@ -74,7 +74,10 @@
     <string>Actions</string>
    </property>
    <property name="toolButtonStyle">
-    <enum>Qt::ToolButtonTextOnly</enum>
+    <enum>Qt::ToolButtonIconOnly</enum>
+   </property>
+   <property name="useDefaultAction" stdset="0">
+    <bool>true</bool>
    </property>
    <attribute name="toolBarArea">
     <enum>RightToolBarArea</enum>
@@ -87,39 +90,50 @@
    <addaction name="actionRemoveItem"/>
    <addaction name="actionEnableItem"/>
    <addaction name="actionDisableItem"/>
+   <addaction name="separator"/>
+   <addaction name="actionViewHomepage"/>
    <addaction name="actionViewConfigs"/>
    <addaction name="actionViewFolder"/>
   </widget>
   <action name="actionAddItem">
    <property name="text">
-    <string>&amp;Add</string>
+    <string>&amp;Add File</string>
    </property>
    <property name="toolTip">
-    <string>Add</string>
+    <string>Add a locally downloaded file.</string>
    </property>
   </action>
   <action name="actionRemoveItem">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>&amp;Remove</string>
    </property>
    <property name="toolTip">
-    <string>Remove selected item</string>
+    <string>Remove all selected items.</string>
    </property>
   </action>
   <action name="actionEnableItem">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>&amp;Enable</string>
    </property>
    <property name="toolTip">
-    <string>Enable selected item</string>
+    <string>Enable all selected items.</string>
    </property>
   </action>
   <action name="actionDisableItem">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>&amp;Disable</string>
    </property>
    <property name="toolTip">
-    <string>Disable selected item</string>
+    <string>Disable all selected items.</string>
    </property>
   </action>
   <action name="actionViewConfigs">
@@ -134,6 +148,9 @@
    <property name="text">
     <string>View &amp;Folder</string>
    </property>
+   <property name="toolTip">
+    <string>Open the folder in the system file manager.</string>
+   </property>
   </action>
   <action name="actionDownloadItem">
    <property name="enabled">
@@ -143,7 +160,7 @@
     <string>&amp;Download</string>
    </property>
    <property name="toolTip">
-    <string>Download a new resource</string>
+    <string>Download resources from online mod platforms.</string>
    </property>
   </action>
   <action name="actionUpdateItem">
@@ -154,7 +171,59 @@
     <string>Check for &amp;Updates</string>
    </property>
    <property name="toolTip">
-    <string>Try to check or update all selected resources (all resources if none are selected)</string>
+    <string>Try to check or update all selected resources (all resources if none are selected).</string>
+   </property>
+  </action>
+  <action name="actionResetItemMetadata">
+   <property name="text">
+    <string>Reset Update Metadata</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionVerifyItemDependencies">
+   <property name="text">
+    <string>Verify Dependencies</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionExportMetadata">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Export List</string>
+   </property>
+   <property name="toolTip">
+    <string>Export resource's metadata to text.</string>
+   </property>
+  </action>
+  <action name="actionChangeVersion">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Change Version</string>
+   </property>
+   <property name="toolTip">
+    <string>Change a resource's version.</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionViewHomepage">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>View Homepage</string>
+   </property>
+   <property name="toolTip">
+    <string>View the homepages of all selected items.</string>
    </property>
   </action>
  </widget>

@@ -133,7 +133,7 @@ bool processZIP(DataPack& pack, ProcessingLevel level)
     return true;
 }
 
-// https://minecraft.fandom.com/wiki/Data_pack#pack.mcmeta
+// https://minecraft.wiki/w/Data_pack#pack.mcmeta
 bool processMCMeta(DataPack& pack, QByteArray&& raw_data)
 {
     try {
@@ -157,7 +157,7 @@ bool validate(QFileInfo file)
 
 }  // namespace DataPackUtils
 
-LocalDataPackParseTask::LocalDataPackParseTask(int token, DataPack& dp) : Task(nullptr, false), m_token(token), m_data_pack(dp) {}
+LocalDataPackParseTask::LocalDataPackParseTask(int token, DataPack& dp) : Task(false), m_token(token), m_data_pack(dp) {}
 
 bool LocalDataPackParseTask::abort()
 {

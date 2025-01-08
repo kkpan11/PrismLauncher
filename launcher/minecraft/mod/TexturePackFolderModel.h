@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 /*
- *  PolyMC - Minecraft Launcher
+ *  Prism Launcher - Minecraft Launcher
  *  Copyright (c) 2022 flowln <flowlnlnln@gmail.com>
  *  Copyright (C) 2022 Sefa Eyeoglu <contact@scrumplex.net>
  *
@@ -40,32 +40,22 @@
 
 #include "TexturePack.h"
 
-class TexturePackFolderModel : public ResourceFolderModel
-{
+class TexturePackFolderModel : public ResourceFolderModel {
     Q_OBJECT
 
-public:
+   public:
+    enum Columns { ActiveColumn = 0, ImageColumn, NameColumn, DateColumn, ProviderColumn, SizeColumn, NUM_COLUMNS };
 
-    enum Columns
-    {
-        ActiveColumn = 0,
-        ImageColumn,
-        NameColumn,
-        DateColumn,
-        NUM_COLUMNS
-    };
-
-    explicit TexturePackFolderModel(const QString &dir, std::shared_ptr<const BaseInstance> instance);
+    explicit TexturePackFolderModel(const QDir& dir, BaseInstance* instance, bool is_indexed, bool create_dir, QObject* parent = nullptr);
 
     virtual QString id() const override { return "texturepacks"; }
 
-    [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    [[nodiscard]] QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
 
     [[nodiscard]] QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
-    [[nodiscard]] int columnCount(const QModelIndex &parent) const override;
+    [[nodiscard]] int columnCount(const QModelIndex& parent) const override;
 
-    explicit TexturePackFolderModel(const QString &dir, BaseInstance* instance);
-    [[nodiscard]] Task* createUpdateTask() override;
+    [[nodiscard]] Resource* createResource(const QFileInfo& file) override { return new TexturePack(file); }
     [[nodiscard]] Task* createParseTask(Resource&) override;
 
     RESOURCE_HELPERS(TexturePack)

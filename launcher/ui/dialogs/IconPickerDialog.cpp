@@ -13,9 +13,11 @@
  * limitations under the License.
  */
 
-#include <QKeyEvent>
-#include <QPushButton>
 #include <QFileDialog>
+#include <QKeyEvent>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QSortFilterProxyModel>
 
 #include "Application.h"
 
@@ -24,15 +26,23 @@
 
 #include "ui/instanceview/InstanceDelegate.h"
 
+#include <DesktopServices.h>
 #include "icons/IconList.h"
 #include "icons/IconUtils.h"
-#include <DesktopServices.h>
 
-IconPickerDialog::IconPickerDialog(QWidget *parent)
-    : QDialog(parent), ui(new Ui::IconPickerDialog)
+IconPickerDialog::IconPickerDialog(QWidget* parent) : QDialog(parent), ui(new Ui::IconPickerDialog)
 {
     ui->setupUi(this);
     setWindowModality(Qt::WindowModal);
+
+    searchBar = new QLineEdit(this);
+    searchBar->setPlaceholderText(tr("Search..."));
+    ui->verticalLayout->insertWidget(0, searchBar);
+
+    proxyModel = new QSortFilterProxyModel(this);
+    proxyModel->setSourceModel(APPLICATION->icons().get());
+    proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    ui->iconView->setModel(proxyModel);
 
     auto contentsWidget = ui->iconView;
     contentsWidget->setViewMode(QListView::IconMode);
@@ -58,42 +68,47 @@ IconPickerDialog::IconPickerDialog(QWidget *parent)
 
     contentsWidget->installEventFilter(this);
 
-    contentsWidget->setModel(APPLICATION->icons().get());
+    contentsWidget->setModel(proxyModel);
 
     // NOTE: ResetRole forces the button to be on the left, while the OK/Cancel ones are on the right. We win.
     auto buttonAdd = ui->buttonBox->addButton(tr("Add Icon"), QDialogButtonBox::ResetRole);
     buttonRemove = ui->buttonBox->addButton(tr("Remove Icon"), QDialogButtonBox::ResetRole);
+
+    ui->buttonBox->button(QDialogButtonBox::Cancel)->setText(tr("Cancel"));
+    ui->buttonBox->button(QDialogButtonBox::Ok)->setText(tr("OK"));
 
     connect(buttonAdd, SIGNAL(clicked(bool)), SLOT(addNewIcon()));
     connect(buttonRemove, SIGNAL(clicked(bool)), SLOT(removeSelectedIcon()));
 
     connect(contentsWidget, SIGNAL(doubleClicked(QModelIndex)), SLOT(activated(QModelIndex)));
 
-    connect(contentsWidget->selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)), SLOT(selectionChanged(QItemSelection, QItemSelection)));
+    connect(contentsWidget->selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)),
+            SLOT(selectionChanged(QItemSelection, QItemSelection)));
 
     auto buttonFolder = ui->buttonBox->addButton(tr("Open Folder"), QDialogButtonBox::ResetRole);
     connect(buttonFolder, &QPushButton::clicked, this, &IconPickerDialog::openFolder);
+    connect(searchBar, &QLineEdit::textChanged, this, &IconPickerDialog::filterIcons);
+    // Prevent incorrect indices from e.g. filesystem changes
+    connect(APPLICATION->icons().get(), &IconList::iconUpdated, this, [this]() { proxyModel->invalidate(); });
 }
 
-bool IconPickerDialog::eventFilter(QObject *obj, QEvent *evt)
+bool IconPickerDialog::eventFilter(QObject* obj, QEvent* evt)
 {
     if (obj != ui->iconView)
         return QDialog::eventFilter(obj, evt);
-    if (evt->type() != QEvent::KeyPress)
-    {
+    if (evt->type() != QEvent::KeyPress) {
         return QDialog::eventFilter(obj, evt);
     }
-    QKeyEvent *keyEvent = static_cast<QKeyEvent *>(evt);
-    switch (keyEvent->key())
-    {
-    case Qt::Key_Delete:
-        removeSelectedIcon();
-        return true;
-    case Qt::Key_Plus:
-        addNewIcon();
-        return true;
-    default:
-        break;
+    QKeyEvent* keyEvent = static_cast<QKeyEvent*>(evt);
+    switch (keyEvent->key()) {
+        case Qt::Key_Delete:
+            removeSelectedIcon();
+            return true;
+        case Qt::Key_Plus:
+            addNewIcon();
+            return true;
+        default:
+            break;
     }
     return QDialog::eventFilter(obj, evt);
 }
@@ -142,8 +157,7 @@ int IconPickerDialog::execWithSelection(QString selection)
 
     int index_nr = list->getIconIndex(selection);
     auto model_index = list->index(index_nr);
-    contentsWidget->selectionModel()->select(
-        model_index, QItemSelectionModel::Current | QItemSelectionModel::Select);
+    contentsWidget->selectionModel()->select(model_index, QItemSelectionModel::Current | QItemSelectionModel::Select);
 
     QMetaObject::invokeMethod(this, "delayed_scroll", Qt::QueuedConnection, Q_ARG(QModelIndex, model_index));
     return QDialog::exec();
@@ -162,5 +176,10 @@ IconPickerDialog::~IconPickerDialog()
 
 void IconPickerDialog::openFolder()
 {
-    DesktopServices::openDirectory(APPLICATION->icons()->getDirectory(), true);
+    DesktopServices::openPath(APPLICATION->icons()->iconDirectory(selectedIconKey), true);
+}
+
+void IconPickerDialog::filterIcons(const QString& query)
+{
+    proxyModel->setFilterFixedString(query);
 }

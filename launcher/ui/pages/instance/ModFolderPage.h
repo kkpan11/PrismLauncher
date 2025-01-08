@@ -4,6 +4,7 @@
  *  Copyright (c) 2022 Jamie Mansfield <jmansfield@cadixdev.org>
  *  Copyright (C) 2022 Sefa Eyeoglu <contact@scrumplex.net>
  *  Copyright (C) 2022 TheKodeToad <TheKodeToad@proton.me>
+ *  Copyright (c) 2023 Trial97 <alexandru.tripon97@gmail.com>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -43,7 +44,7 @@ class ModFolderPage : public ExternalResourcesPage {
     Q_OBJECT
 
    public:
-    explicit ModFolderPage(BaseInstance* inst, std::shared_ptr<ModFolderModel> mods, QWidget* parent = nullptr);
+    explicit ModFolderPage(BaseInstance* inst, std::shared_ptr<ModFolderModel> model, QWidget* parent = nullptr);
     virtual ~ModFolderPage() = default;
 
     void setFilter(const QString& filter) { m_fileSelectionFilter = filter; }
@@ -56,20 +57,23 @@ class ModFolderPage : public ExternalResourcesPage {
     virtual bool shouldDisplay() const override;
 
    public slots:
-    bool onSelectionChanged(const QModelIndex& current, const QModelIndex& previous) override;
+    void updateFrame(const QModelIndex& current, const QModelIndex& previous) override;
 
    private slots:
-    void runningStateChanged(bool running);
-    void removeItems(const QItemSelection &selection) override;
+    void removeItems(const QItemSelection& selection) override;
 
-    void installMods();
-    void updateMods();
+    void downloadMods();
+    void updateMods(bool includeDeps = false);
+    void deleteModMetadata();
+    void exportModMetadata();
+    void changeModVersion();
 
    protected:
     std::shared_ptr<ModFolderModel> m_model;
 };
 
 class CoreModFolderPage : public ModFolderPage {
+    Q_OBJECT
    public:
     explicit CoreModFolderPage(BaseInstance* inst, std::shared_ptr<ModFolderModel> mods, QWidget* parent = 0);
     virtual ~CoreModFolderPage() = default;
@@ -83,6 +87,7 @@ class CoreModFolderPage : public ModFolderPage {
 };
 
 class NilModFolderPage : public ModFolderPage {
+    Q_OBJECT
    public:
     explicit NilModFolderPage(BaseInstance* inst, std::shared_ptr<ModFolderModel> mods, QWidget* parent = 0);
     virtual ~NilModFolderPage() = default;
