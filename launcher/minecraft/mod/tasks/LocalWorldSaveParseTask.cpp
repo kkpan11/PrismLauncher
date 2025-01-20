@@ -50,8 +50,8 @@ bool process(WorldSave& pack, ProcessingLevel level)
 /// @param dir the path to check
 /// @param saves used in recursive call if a "saves" dir was found
 /// @return std::tuple of (
-///             bool <found level.dat>, 
-///             QString <name of folder containing level.dat>, 
+///             bool <found level.dat>,
+///             QString <name of folder containing level.dat>,
 ///             bool <saves folder found>
 ///         )
 static std::tuple<bool, QString, bool> contains_level_dat(QDir dir, bool saves = false)
@@ -101,8 +101,8 @@ bool processFolder(WorldSave& save, ProcessingLevel level)
 /// @brief checks a folder structure to see if it contains a level.dat
 /// @param zip the zip file to check
 /// @return std::tuple of (
-///             bool <found level.dat>, 
-///             QString <name of folder containing level.dat>, 
+///             bool <found level.dat>,
+///             QString <name of folder containing level.dat>,
 ///             bool <saves folder found>
 ///         )
 static std::tuple<bool, QString, bool> contains_level_dat(QuaZip& zip)
@@ -170,7 +170,7 @@ bool validate(QFileInfo file)
 
 }  // namespace WorldSaveUtils
 
-LocalWorldSaveParseTask::LocalWorldSaveParseTask(int token, WorldSave& save) : Task(nullptr, false), m_token(token), m_save(save) {}
+LocalWorldSaveParseTask::LocalWorldSaveParseTask(int token, WorldSave& save) : Task(false), m_token(token), m_save(save) {}
 
 bool LocalWorldSaveParseTask::abort()
 {

@@ -42,6 +42,7 @@ struct BlockedMod {
     bool matched;
     QString localPath;
     QString targetFolder;
+    bool move = false;
 };
 
 QT_BEGIN_NAMESPACE
@@ -54,7 +55,7 @@ class BlockedModsDialog : public QDialog {
     Q_OBJECT
 
    public:
-    BlockedModsDialog(QWidget* parent, const QString& title, const QString& text, QList<BlockedMod>& mods);
+    BlockedModsDialog(QWidget* parent, const QString& title, const QString& text, QList<BlockedMod>& mods, QString hash_type = "sha1");
 
     ~BlockedModsDialog() override;
 
@@ -73,6 +74,7 @@ class BlockedModsDialog : public QDialog {
     QSet<QString> m_pending_hash_paths;
     bool m_rehash_pending;
     QPushButton* m_openMissingButton;
+    QString m_hash_type;
 
     void openAll(bool missingOnly);
     void addDownloadFolder();

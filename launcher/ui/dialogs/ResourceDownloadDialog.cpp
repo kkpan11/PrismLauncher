@@ -2,7 +2,7 @@
 /*
  *  Prism Launcher - Minecraft Launcher
  *  Copyright (C) 2022 Sefa Eyeoglu <contact@scrumplex.net>
- *  Copyright (C) 2022 TheKodeToad <TheKodeToad@proton.me>
+ *  Copyright (C) 2023 TheKodeToad <TheKodeToad@proton.me>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 #include "Application.h"
 #include "ResourceDownloadTask.h"
 
+#include "minecraft/PackProfile.h"
 #include "minecraft/mod/ModFolderModel.h"
 #include "minecraft/mod/ResourcePackFolderModel.h"
 #include "minecraft/mod/ShaderPackFolderModel.h"
@@ -43,6 +44,8 @@
 #include "ui/pages/modplatform/flame/FlameResourcePages.h"
 #include "ui/pages/modplatform/modrinth/ModrinthResourcePages.h"
 
+#include "modplatform/flame/FlameAPI.h"
+#include "modplatform/modrinth/ModrinthAPI.h"
 #include "ui/widgets/PageContainer.h"
 
 namespace ResourceDownload {
@@ -89,6 +92,19 @@ void ResourceDownloadDialog::accept()
 
 void ResourceDownloadDialog::reject()
 {
+    auto selected = getTasks();
+    if (selected.count() > 0) {
+        auto reply = CustomMessageBox::selectable(this, tr("Confirmation Needed"),
+                                                  tr("You have %1 selected resources.\n"
+                                                     "Are you sure you want to close this dialog?")
+                                                      .arg(selected.count()),
+                                                  QMessageBox::Question, QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
+                         ->exec();
+        if (reply != QMessageBox::Yes) {
+            return;
+        }
+    }
+
     if (!geometrySaveKey().isEmpty())
         APPLICATION->settings()->set(geometrySaveKey(), saveGeometry().toBase64());
 
@@ -123,43 +139,23 @@ void ResourceDownloadDialog::connectButtons()
     connect(HelpButton, &QPushButton::clicked, m_container, &PageContainer::help);
 }
 
-static ModPlatform::ProviderCapabilities ProviderCaps;
-
-QStringList getRequiredBy(QList<ResourceDownloadDialog::DownloadTaskPtr> tasks, ResourceDownloadDialog::DownloadTaskPtr pack)
-{
-    auto addonId = pack->getPack()->addonId;
-    auto provider = pack->getPack()->provider;
-    auto version = pack->getVersionID();
-    auto req = QStringList();
-    for (auto& task : tasks) {
-        if (provider != task->getPack()->provider)
-            continue;
-        auto deps = task->getVersion().dependencies;
-        if (auto dep = std::find_if(deps.begin(), deps.end(),
-                                    [addonId, provider, version](const ModPlatform::Dependency& d) {
-                                        return d.type == ModPlatform::DependencyType::REQUIRED &&
-                                               (provider == ModPlatform::ResourceProvider::MODRINTH && d.addonId.toString().isEmpty()
-                                                    ? version == d.version
-                                                    : d.addonId == addonId);
-                                    });
-            dep != deps.end()) {
-            req.append(task->getName());
-        }
-    }
-    return req;
-}
-
 void ResourceDownloadDialog::confirm()
 {
     auto confirm_dialog = ReviewMessageBox::create(this, tr("Confirm %1 to download").arg(resourcesString()));
     confirm_dialog->retranslateUi(resourcesString());
 
+    QHash<QString, GetModDependenciesTask::PackDependencyExtraInfo> dependencyExtraInfo;
+    QStringList depNames;
     if (auto task = getModDependenciesTask(); task) {
         connect(task.get(), &Task::failed, this,
-                [&](QString reason) { CustomMessageBox::selectable(this, tr("Error"), reason, QMessageBox::Critical)->exec(); });
+                [this](QString reason) { CustomMessageBox::selectable(this, tr("Error"), reason, QMessageBox::Critical)->exec(); });
 
-        connect(task.get(), &Task::succeeded, this, [&]() {
-            QStringList warnings = task->warnings();
+        auto weak = task.toWeakRef();
+        connect(task.get(), &Task::succeeded, this, [this, weak]() {
+            QStringList warnings;
+            if (auto task = weak.lock()) {
+                warnings = task->warnings();
+            }
             if (warnings.count()) {
                 CustomMessageBox::selectable(this, tr("Warnings"), warnings.join('\n'), QMessageBox::Warning)->exec();
             }
@@ -176,8 +172,11 @@ void ResourceDownloadDialog::confirm()
             QMetaObject::invokeMethod(this, "reject", Qt::QueuedConnection);
             return;
         } else {
-            for (auto dep : task->getDependecies())
+            for (auto dep : task->getDependecies()) {
                 addResource(dep->pack, dep->version);
+                depNames << dep->pack->name;
+            }
+            dependencyExtraInfo = task->getExtraInfo();
         }
     }
 
@@ -186,8 +185,10 @@ void ResourceDownloadDialog::confirm()
         return QString::compare(a->getName(), b->getName(), Qt::CaseInsensitive) < 0;
     });
     for (auto& task : selected) {
+        auto extraInfo = dependencyExtraInfo.value(task->getPack()->addonId.toString());
         confirm_dialog->appendResource({ task->getName(), task->getFilename(), task->getCustomPath(),
-                                         ProviderCaps.name(task->getProvider()), getRequiredBy(selected, task) });
+                                         ModPlatform::ProviderCapabilities::name(task->getProvider()), extraInfo.required_by,
+                                         task->getVersion().version_type.toString(), !extraInfo.maybe_installed });
     }
 
     if (confirm_dialog->exec()) {
@@ -199,6 +200,9 @@ void ResourceDownloadDialog::confirm()
         }
 
         this->accept();
+    } else {
+        for (auto name : depNames)
+            removeResource(name);
     }
 }
 
@@ -207,15 +211,17 @@ bool ResourceDownloadDialog::selectPage(QString pageId)
     return m_container->selectPage(pageId);
 }
 
-ResourcePage* ResourceDownloadDialog::getSelectedPage()
+ResourcePage* ResourceDownloadDialog::selectedPage()
 {
-    return m_selectedPage;
+    ResourcePage* result = dynamic_cast<ResourcePage*>(m_container->selectedPage());
+    Q_ASSERT(result != nullptr);
+    return result;
 }
 
 void ResourceDownloadDialog::addResource(ModPlatform::IndexedPack::Ptr pack, ModPlatform::IndexedVersion& ver)
 {
     removeResource(pack->name);
-    m_selectedPage->addResourceToPage(pack, ver, getBaseModel());
+    selectedPage()->addResourceToPage(pack, ver, getBaseModel());
     setButtonStatus();
 }
 
@@ -255,14 +261,10 @@ void ResourceDownloadDialog::selectedPageChanged(BasePage* previous, BasePage* s
         return;
     }
 
-    m_selectedPage = dynamic_cast<ResourcePage*>(selected);
-    if (!m_selectedPage) {
-        qCritical() << "Page '" << selected->displayName() << "' in ResourceDownloadDialog is not a ResourcePage!";
-        return;
-    }
-
     // Same effect as having a global search bar
-    m_selectedPage->setSearchTerm(prev_page->getSearchTerm());
+    ResourcePage* result = dynamic_cast<ResourcePage*>(selected);
+    Q_ASSERT(result != nullptr);
+    result->setSearchTerm(prev_page->getSearchTerm());
 }
 
 ModDownloadDialog::ModDownloadDialog(QWidget* parent, const std::shared_ptr<ModFolderModel>& mods, BaseInstance* instance)
@@ -281,27 +283,30 @@ QList<BasePage*> ModDownloadDialog::getPages()
 {
     QList<BasePage*> pages;
 
-    pages.append(ModrinthModPage::create(this, *m_instance));
-    if (APPLICATION->capabilities() & Application::SupportsFlame)
-        pages.append(FlameModPage::create(this, *m_instance));
+    auto loaders = static_cast<MinecraftInstance*>(m_instance)->getPackProfile()->getSupportedModLoaders().value();
 
-    m_selectedPage = dynamic_cast<ModPage*>(pages[0]);
+    if (ModrinthAPI::validateModLoaders(loaders))
+        pages.append(ModrinthModPage::create(this, *m_instance));
+    if (APPLICATION->capabilities() & Application::SupportsFlame && FlameAPI::validateModLoaders(loaders))
+        pages.append(FlameModPage::create(this, *m_instance));
 
     return pages;
 }
 
 GetModDependenciesTask::Ptr ModDownloadDialog::getModDependenciesTask()
 {
-    if (auto model = dynamic_cast<ModFolderModel*>(getBaseModel().get()); model) {
-        QList<std::shared_ptr<GetModDependenciesTask::PackDependency>> selectedVers;
-        for (auto& selected : getTasks()) {
-            selectedVers.append(std::make_shared<GetModDependenciesTask::PackDependency>(selected->getPack(), selected->getVersion()));
-        }
+    if (!APPLICATION->settings()->get("ModDependenciesDisabled").toBool()) {  // dependencies
+        if (auto model = dynamic_cast<ModFolderModel*>(getBaseModel().get()); model) {
+            QList<std::shared_ptr<GetModDependenciesTask::PackDependency>> selectedVers;
+            for (auto& selected : getTasks()) {
+                selectedVers.append(std::make_shared<GetModDependenciesTask::PackDependency>(selected->getPack(), selected->getVersion()));
+            }
 
-        return makeShared<GetModDependenciesTask>(this, m_instance, model, selectedVers);
+            return makeShared<GetModDependenciesTask>(m_instance, model, selectedVers);
+        }
     }
     return nullptr;
-};
+}
 
 ResourcePackDownloadDialog::ResourcePackDownloadDialog(QWidget* parent,
                                                        const std::shared_ptr<ResourcePackFolderModel>& resource_packs,
@@ -324,8 +329,6 @@ QList<BasePage*> ResourcePackDownloadDialog::getPages()
     pages.append(ModrinthResourcePackPage::create(this, *m_instance));
     if (APPLICATION->capabilities() & Application::SupportsFlame)
         pages.append(FlameResourcePackPage::create(this, *m_instance));
-
-    m_selectedPage = dynamic_cast<ResourcePackResourcePage*>(pages[0]);
 
     return pages;
 }
@@ -352,8 +355,6 @@ QList<BasePage*> TexturePackDownloadDialog::getPages()
     if (APPLICATION->capabilities() & Application::SupportsFlame)
         pages.append(FlameTexturePackPage::create(this, *m_instance));
 
-    m_selectedPage = dynamic_cast<TexturePackResourcePage*>(pages[0]);
-
     return pages;
 }
 
@@ -374,12 +375,26 @@ ShaderPackDownloadDialog::ShaderPackDownloadDialog(QWidget* parent,
 QList<BasePage*> ShaderPackDownloadDialog::getPages()
 {
     QList<BasePage*> pages;
-
     pages.append(ModrinthShaderPackPage::create(this, *m_instance));
-
-    m_selectedPage = dynamic_cast<ShaderPackResourcePage*>(pages[0]);
-
+    if (APPLICATION->capabilities() & Application::SupportsFlame)
+        pages.append(FlameShaderPackPage::create(this, *m_instance));
     return pages;
 }
 
+void ResourceDownloadDialog::setResourceMetadata(const std::shared_ptr<Metadata::ModStruct>& meta)
+{
+    switch (meta->provider) {
+        case ModPlatform::ResourceProvider::MODRINTH:
+            selectPage(Modrinth::id());
+            break;
+        case ModPlatform::ResourceProvider::FLAME:
+            selectPage(Flame::id());
+            break;
+    }
+    setWindowTitle(tr("Change %1 version").arg(meta->name));
+    m_container->hidePageList();
+    m_buttons.hide();
+    auto page = selectedPage();
+    page->openProject(meta->project_id);
+}
 }  // namespace ResourceDownload
